@@ -1,0 +1,1709 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Deposit Dokter - Cloud</title>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <!-- PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+        }
+
+        /* Login Screen Styles */
+        .login-screen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 40px 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            color: #333;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .login-card h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            color: #2563eb;
+        }
+
+        .login-card p {
+            color: #6b7280;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+        }
+
+        .google-login-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            text-decoration: none;
+            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+        }
+
+        .google-login-btn:disabled {
+            background: #9ca3af !important;
+            cursor: not-allowed !important;
+            transform: none !important;
+        }
+
+        .google-login-btn:disabled:hover {
+            background: #9ca3af !important;
+            transform: none !important;
+            box-shadow: 0 4px 12px rgba(156, 163, 175, 0.3) !important;
+        }
+
+        .google-icon {
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #4285f4;
+        }
+
+        /* Loading and Connection Status */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #f5f7fa;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e5e7eb;
+            border-top: 4px solid #2563eb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .connection-status.online {
+            background: #10b981;
+            color: white;
+        }
+
+        .connection-status.offline {
+            background: #ef4444;
+            color: white;
+        }
+
+        .connection-status.syncing {
+            background: #f59e0b;
+            color: white;
+        }
+
+        /* Header with User Info */
+        .header {
+            background: #2563eb;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .user-info {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Rest of the original styles */
+        .doctor-section {
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .doctor-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            align-items: stretch;
+        }
+
+        .doctor-selector select {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            background: white;
+            min-width: 0;
+        }
+
+        .doctor-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-success {
+            background: #059669;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #047857;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-outline:hover {
+            background: #f9fafb;
+        }
+
+        .balance-card {
+            background: linear-gradient(135deg, #1e40af, #3b82f6);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .balance-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .balance-row:last-child {
+            margin-bottom: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .balance-label {
+            opacity: 0.9;
+        }
+
+        .balance-value {
+            font-weight: 600;
+        }
+
+        .balance-value.negative {
+            color: #fbbf24;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .form-section {
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+
+        .transactions-section {
+            padding: 20px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        th {
+            background: #f9fafb;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 0.9rem;
+        }
+
+        td {
+            padding: 12px 8px;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 0.9rem;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .amount {
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .delete-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .total-row {
+            background: #f9fafb;
+            font-weight: 600;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6b7280;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            margin: 20% auto;
+            padding: 20px;
+            width: 90%;
+            max-width: 400px;
+            border-radius: 12px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .no-doctor {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6b7280;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 2000;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success {
+            background: #059669;
+        }
+
+        .notification.error {
+            background: #dc2626;
+        }
+
+        .notification.info {
+            background: #2563eb;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                margin: 0;
+            }
+
+            th,
+            td {
+                padding: 8px 4px;
+                font-size: 0.8rem;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .doctor-selector {
+                flex-direction: column;
+            }
+
+            .user-info {
+                position: relative;
+                top: auto;
+                right: auto;
+                justify-content: center;
+                margin-top: 10px;
+            }
+
+            .header {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status online">
+        <span id="statusText">🟢 Online</span>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading">
+        <div class="loading-spinner"></div>
+        <p>Memuat aplikasi...</p>
+    </div>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen" style="display: none;">
+        <div class="login-card">
+            <h1>⚕️ Sistem Deposit Dokter</h1>
+            <p>Kelola keuangan dokter dengan mudah dan aman</p>
+            <button id="googleLoginBtn" class="google-login-btn">
+                <div class="google-icon">G</div>
+                Masuk dengan Google
+            </button>
+            <div style="margin-top: 20px; font-size: 0.9rem; color: #6b7280;">
+                Data Anda akan disimpan dengan aman di cloud dan tersinkronisasi di semua perangkat
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="container" style="display: none;">
+        <div class="header">
+            <h1>⚕️ Sistem Deposit Dokter</h1>
+            <p>Wingman Assistant - Cloud Edition</p>
+            <div class="user-info">
+                <img id="userAvatar" class="user-avatar" src="" alt="User">
+                <button id="logoutBtn" class="logout-btn">Keluar</button>
+            </div>
+        </div>
+
+        <div class="doctor-section">
+            <div class="doctor-selector">
+                <select id="doctorSelect">
+                    <option value="">Pilih Dokter</option>
+                </select>
+                <div class="doctor-actions">
+                    <button class="btn btn-primary" onclick="showAddDoctorModal()" title="Tambah Dokter Baru">
+                        + Dokter
+                    </button>
+                    <button class="btn btn-danger" onclick="showDeleteDoctorModal()" id="deleteDoctorBtn"
+                        style="display: none;" title="Hapus Dokter">
+                        ×
+                    </button>
+                </div>
+            </div>
+
+            <div id="doctorInfo" style="display: none;">
+                <div class="balance-card">
+                    <div class="balance-row">
+                        <span class="balance-label">Total Deposit:</span>
+                        <span class="balance-value" id="totalDeposit">Rp 0</span>
+                    </div>
+                    <div class="balance-row">
+                        <span class="balance-label">Total Pengeluaran:</span>
+                        <span class="balance-value" id="totalExpense">Rp 0</span>
+                    </div>
+                    <div class="balance-row">
+                        <span class="balance-label">Sisa:</span>
+                        <span class="balance-value" id="remainingBalance">Rp 0</span>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button class="btn btn-success" onclick="showAddDepositModal()">
+                        + Deposit
+                    </button>
+                    <button class="btn btn-primary" id="toggleExpenseBtn">
+                        + Tambah Pengeluaran
+                    </button>
+                    <button class="btn btn-outline" onclick="showExportModal()">
+                        📄 Export PDF
+                    </button>
+                </div>
+            </div>
+
+            <div id="noDoctorSelected" class="no-doctor">
+                <p>Silakan pilih atau tambah dokter terlebih dahulu</p>
+            </div>
+        </div>
+
+        <div id="expenseForm" class="form-section"
+            style="display: none; border: 2px solid #2563eb; background: #f8fafc;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 class="section-title">Tambah Pengeluaran</h3>
+                <button class="btn btn-outline" id="closeFormBtn" style="padding: 8px 12px; font-size: 12px;">
+                    × Tutup
+                </button>
+            </div>
+            <form id="addExpenseForm">
+                <div class="form-group">
+                    <label>Tanggal</label>
+                    <input type="date" id="expenseDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Keterangan</label>
+                    <input type="text" id="expenseDesc" placeholder="Contoh: Beli makan siang" required>
+                </div>
+                <div class="form-group">
+                    <label>Nominal (Rp)</label>
+                    <input type="number" id="expenseAmount" placeholder="50000" required>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">
+                        + Tambah Pengeluaran
+                    </button>
+                    <button type="button" class="btn btn-outline" id="resetFormBtn" style="flex: 0 0 auto;">
+                        ↻ Reset
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div id="transactionsSection" class="transactions-section" style="display: none;">
+            <div class="section-header">
+                <h3 class="section-title">Riwayat Transaksi</h3>
+            </div>
+
+            <div id="transactionsTable">
+                <div class="empty-state">
+                    <p>Belum ada transaksi</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="notification"></div>
+
+    <!-- Modal Add Doctor -->
+    <div id="addDoctorModal" class="modal">
+        <div class="modal-content">
+            <h3>Tambah Dokter Baru</h3>
+            <div class="form-group">
+                <label>Nama Dokter</label>
+                <input type="text" id="newDoctorName" placeholder="Dr. Benita" oninput="checkDoctorName()">
+                <small id="nameHint" style="color: #6b7280; font-size: 0.8rem; display: none;">Nama dokter sudah ada,
+                    gunakan nama yang berbeda</small>
+            </div>
+            <div class="form-group">
+                <label>Deposit Awal (Rp)</label>
+                <input type="number" id="initialDeposit" placeholder="500000">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" onclick="addDoctor()">Tambah</button>
+                <button class="btn btn-outline" onclick="closeModal('addDoctorModal')">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Add Deposit -->
+    <div id="addDepositModal" class="modal">
+        <div class="modal-content">
+            <h3>Tambah Deposit</h3>
+            <div class="form-group">
+                <label>Keterangan Deposit</label>
+                <input type="text" id="depositDesc" placeholder="Contoh: Deposit tambahan dari dokter">
+            </div>
+            <div class="form-group">
+                <label>Jumlah Deposit (Rp)</label>
+                <input type="number" id="additionalDeposit" placeholder="200000">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-success" onclick="addDeposit()">Tambah</button>
+                <button class="btn btn-outline" onclick="closeModal('addDepositModal')">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Confirm Delete -->
+    <div id="confirmDeleteModal" class="modal">
+        <div class="modal-content">
+            <h3>Hapus Transaksi</h3>
+            <p>Yakin ingin menghapus transaksi ini?</p>
+            <div class="modal-buttons">
+                <button class="btn btn-danger" onclick="confirmDelete()">Hapus</button>
+                <button class="btn btn-outline" onclick="closeModal('confirmDeleteModal')">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Confirm Delete Doctor -->
+    <div id="confirmDeleteDoctorModal" class="modal">
+        <div class="modal-content">
+            <h3>Hapus Dokter</h3>
+            <p id="deleteDoctorText">Yakin ingin menghapus dokter ini beserta semua data transaksinya?</p>
+            <div class="modal-buttons">
+                <button class="btn btn-danger" onclick="confirmDeleteDoctor()">Hapus</button>
+                <button class="btn btn-outline" onclick="closeModal('confirmDeleteDoctorModal')">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Export PDF -->
+    <div id="exportPDFModal" class="modal">
+        <div class="modal-content">
+            <h3>Export Laporan PDF</h3>
+            <div class="form-group">
+                <label>Pilih Data Export:</label>
+                <select id="exportType"
+                    style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                    <option value="all">Semua Transaksi</option>
+                    <option value="range">Berdasarkan Tanggal</option>
+                </select>
+            </div>
+            <div id="dateRangeGroup" style="display: none;">
+                <div class="form-group">
+                    <label>Dari Tanggal:</label>
+                    <input type="date" id="exportFromDate"
+                        style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                </div>
+                <div class="form-group">
+                    <label>Sampai Tanggal:</label>
+                    <input type="date" id="exportToDate"
+                        style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Urutan:</label>
+                <select id="exportSort"
+                    style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px;">
+                    <option value="newest">Terbaru Dulu</option>
+                    <option value="oldest">Terlama Dulu</option>
+                </select>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" onclick="processExportToPDF()">📄 Export PDF</button>
+                <button class="btn btn-outline" onclick="closeModal('exportPDFModal')">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== FIREBASE CONFIGURATION =====
+        // TODO: Ganti dengan config Firebase Anda
+        const firebaseConfig = {
+            apiKey: "AIzaSyCDDmHhlwcjgBArmvXiaTnjgKqGHIi3DHc",
+            authDomain: "wmproject-9269a.firebaseapp.com",
+            projectId: "wmproject-9269a",
+            storageBucket: "wmproject-9269a.firebasestorage.app",
+            messagingSenderId: "706043186227",
+            appId: "1:706043186227:web:470bfa89aa78c68829e746",
+            measurementId: "G-FW9JLPDVJS"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // Enable offline persistence
+        db.enablePersistence().catch((err) => {
+            console.log('Offline persistence error:', err.code);
+        });
+
+        // ===== GLOBAL VARIABLES =====
+        let currentUser = null;
+        let doctors = [];
+        let currentDoctorId = null;
+        let deleteTransactionId = null;
+        let isOnline = navigator.onLine;
+
+        // ===== CONNECTION STATUS =====
+        function updateConnectionStatus() {
+            const statusEl = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('statusText');
+
+            if (!navigator.onLine) {
+                statusEl.className = 'connection-status offline';
+                statusText.textContent = '🔴 Offline';
+                isOnline = false;
+            } else {
+                statusEl.className = 'connection-status online';
+                statusText.textContent = '🟢 Online';
+                isOnline = true;
+            }
+        }
+
+        function showSyncStatus() {
+            const statusEl = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('statusText');
+            statusEl.className = 'connection-status syncing';
+            statusText.textContent = '🟡 Sinkronisasi...';
+
+            setTimeout(() => {
+                updateConnectionStatus();
+            }, 2000);
+        }
+
+        window.addEventListener('online', updateConnectionStatus);
+        window.addEventListener('offline', updateConnectionStatus);
+
+        // ===== AUTHENTICATION =====
+        function initAuth() {
+            // Handle redirect result for fallback login
+            auth.getRedirectResult().then((result) => {
+                if (result.user) {
+                    console.log('Redirect login successful:', result.user.email);
+                    showNotification('✅ Login berhasil! Selamat datang ' + (result.user.displayName || result.user.email), 'success');
+                }
+            }).catch((error) => {
+                console.error('Redirect login error:', error);
+                if (error.code !== 'auth/cancelled-popup-request') {
+                    showNotification('❌ Login gagal: ' + error.message, 'error');
+                }
+            });
+
+            auth.onAuthStateChanged((user) => {
+                console.log('Auth state changed:', user ? user.email : 'No user');
+
+                if (user) {
+                    currentUser = user;
+                    showMainApp();
+                    loadUserData();
+                } else {
+                    currentUser = null;
+                    showLoginScreen();
+                }
+
+                hideLoadingScreen();
+            });
+        }
+
+        function showLoginScreen() {
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('mainApp').style.display = 'none';
+        }
+
+        function showMainApp() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+
+            // Update user info in header
+            if (currentUser) {
+                document.getElementById('userAvatar').src = currentUser.photoURL || '';
+                document.getElementById('userAvatar').alt = currentUser.displayName || currentUser.email;
+            }
+        }
+
+        function hideLoadingScreen() {
+            document.getElementById('loadingScreen').style.display = 'none';
+        }
+
+        let isSigningIn = false; // Prevent multiple login attempts
+
+        async function signInWithGoogle() {
+            // Prevent multiple simultaneous login attempts
+            if (isSigningIn) {
+                console.log('Login already in progress...');
+                return;
+            }
+
+            try {
+                isSigningIn = true;
+
+                // Disable login button to prevent multiple clicks
+                const loginBtn = document.getElementById('googleLoginBtn');
+                loginBtn.disabled = true;
+                loginBtn.textContent = 'Sedang masuk...';
+                loginBtn.style.opacity = '0.7';
+
+                // Clear any existing popup
+                await auth.signOut().catch(() => { }); // Silent fail if no user
+
+                const provider = new firebase.auth.GoogleAuthProvider();
+                provider.addScope('email');
+                provider.addScope('profile');
+
+                // Force account selection to avoid cached login issues
+                provider.setCustomParameters({
+                    prompt: 'select_account'
+                });
+
+                console.log('Starting Google sign-in...');
+                const result = await auth.signInWithPopup(provider);
+
+                console.log('Login successful:', result.user.email);
+                showNotification('✅ Login berhasil! Selamat datang ' + (result.user.displayName || result.user.email), 'success');
+
+            } catch (error) {
+                console.error('Login error:', error);
+
+                // Handle specific error types
+                if (error.code === 'auth/cancelled-popup-request') {
+                    showNotification('⚠️ Login dibatalkan. Silakan coba lagi.', 'info');
+                } else if (error.code === 'auth/popup-blocked') {
+                    showNotification('❌ Popup diblokir browser. Izinkan popup untuk login.', 'error');
+                    // Fallback to redirect method
+                    console.log('Trying redirect method...');
+                    try {
+                        const provider = new firebase.auth.GoogleAuthProvider();
+                        await auth.signInWithRedirect(provider);
+                    } catch (redirectError) {
+                        console.error('Redirect login also failed:', redirectError);
+                    }
+                } else if (error.code === 'auth/popup-closed-by-user') {
+                    showNotification('ℹ️ Login dibatalkan oleh user.', 'info');
+                } else {
+                    showNotification('❌ Login gagal: ' + (error.message || 'Terjadi kesalahan'), 'error');
+                }
+            } finally {
+                // Re-enable login button
+                isSigningIn = false;
+                const loginBtn = document.getElementById('googleLoginBtn');
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = '<div class="google-icon">G</div>Masuk dengan Google';
+                loginBtn.style.opacity = '1';
+            }
+        }
+
+        async function signOut() {
+            try {
+                await auth.signOut();
+                showNotification('ℹ️ Anda telah keluar dari aplikasi', 'info');
+            } catch (error) {
+                console.error('Logout error:', error);
+                showNotification('❌ Logout gagal: ' + error.message, 'error');
+            }
+        }
+
+        // ===== FIRESTORE DATA OPERATIONS =====
+        async function loadUserData() {
+            if (!currentUser) return;
+
+            try {
+                showSyncStatus();
+                console.log('Loading data for user:', currentUser.uid);
+
+                const userDocRef = db.collection('users').doc(currentUser.uid);
+                const docSnapshot = await userDocRef.get();
+
+                if (docSnapshot.exists) {
+                    const userData = docSnapshot.data();
+                    doctors = userData.doctors || [];
+                    console.log('Loaded doctors:', doctors.length);
+                } else {
+                    // First time user - create default doctor
+                    doctors = [{
+                        id: Date.now(),
+                        name: 'Dr. Benita',
+                        totalDeposit: 500000,
+                        transactions: [{
+                            id: Date.now() + 1,
+                            date: new Date().toISOString().split('T')[0],
+                            description: 'Deposit Awal',
+                            amount: 500000,
+                            type: 'income'
+                        }],
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    }];
+
+                    await saveUserData();
+                    showNotification('🎉 Selamat datang! Data contoh telah dibuat untuk Anda', 'success');
+                }
+
+                loadDoctors();
+
+                // Auto-select first doctor
+                if (doctors.length > 0) {
+                    selectDoctor(doctors[0].id);
+                    document.getElementById('doctorSelect').value = doctors[0].id;
+                }
+
+            } catch (error) {
+                console.error('Error loading user data:', error);
+                showNotification('❌ Gagal memuat data: ' + error.message, 'error');
+
+                // Fallback to default data if error
+                doctors = [{
+                    id: Date.now(),
+                    name: 'Dr. Benita (Offline)',
+                    totalDeposit: 500000,
+                    transactions: [{
+                        id: Date.now() + 1,
+                        date: new Date().toISOString().split('T')[0],
+                        description: 'Deposit Awal',
+                        amount: 500000,
+                        type: 'income'
+                    }]
+                }];
+                loadDoctors();
+            }
+        }
+
+        async function saveUserData() {
+            if (!currentUser) return;
+
+            try {
+                showSyncStatus();
+                console.log('Saving data for user:', currentUser.uid);
+
+                const userDocRef = db.collection('users').doc(currentUser.uid);
+
+                // Update timestamps
+                const now = new Date();
+                doctors.forEach(doctor => {
+                    doctor.updatedAt = now;
+                    if (!doctor.createdAt) {
+                        doctor.createdAt = now;
+                    }
+                });
+
+                await userDocRef.set({
+                    doctors: doctors,
+                    lastUpdated: now,
+                    email: currentUser.email,
+                    displayName: currentUser.displayName
+                }, { merge: true });
+
+                console.log('Data saved successfully');
+
+            } catch (error) {
+                console.error('Error saving data:', error);
+                showNotification('⚠️ Data disimpan offline, akan sinkronisasi saat online', 'info');
+            }
+        }
+
+        // ===== UTILITY FUNCTIONS =====
+        function showNotification(message, type) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = 'notification ' + type;
+
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 100);
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 4000);
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount);
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleDateString('id-ID');
+        }
+
+        function setTodayDate() {
+            const today = new Date();
+            const dateString = today.getFullYear() + '-' +
+                String(today.getMonth() + 1).padStart(2, '0') + '-' +
+                String(today.getDate()).padStart(2, '0');
+            document.getElementById('expenseDate').value = dateString;
+        }
+
+        // ===== DOCTOR MANAGEMENT =====
+        function loadDoctors() {
+            const select = document.getElementById('doctorSelect');
+            select.innerHTML = '<option value="">Pilih Dokter</option>';
+
+            doctors.forEach(doctor => {
+                const option = document.createElement('option');
+                option.value = doctor.id;
+                option.textContent = doctor.name;
+                select.appendChild(option);
+            });
+        }
+
+        function selectDoctor(doctorId) {
+            currentDoctorId = doctorId;
+            const doctor = doctors.find(d => d.id == doctorId);
+
+            if (doctor) {
+                updateDoctorInfo(doctor);
+                document.getElementById('doctorInfo').style.display = 'block';
+                document.getElementById('transactionsSection').style.display = 'block';
+                document.getElementById('noDoctorSelected').style.display = 'none';
+                document.getElementById('deleteDoctorBtn').style.display = 'inline-block';
+
+                document.getElementById('expenseForm').style.display = 'none';
+                document.getElementById('toggleExpenseBtn').textContent = '+ Tambah Pengeluaran';
+
+                setTodayDate();
+            } else {
+                document.getElementById('doctorInfo').style.display = 'none';
+                document.getElementById('expenseForm').style.display = 'none';
+                document.getElementById('transactionsSection').style.display = 'none';
+                document.getElementById('noDoctorSelected').style.display = 'block';
+                document.getElementById('deleteDoctorBtn').style.display = 'none';
+            }
+        }
+
+        function updateDoctorInfo(doctor) {
+            const totalExpense = doctor.transactions.filter(t =>
+                t.type === 'expense' || !t.type
+            ).reduce((sum, t) => sum + t.amount, 0);
+
+            const totalIncome = doctor.transactions.filter(t =>
+                t.type === 'income'
+            ).reduce((sum, t) => sum + t.amount, 0);
+
+            doctor.totalDeposit = totalIncome;
+            const remainingBalance = doctor.totalDeposit - totalExpense;
+
+            document.getElementById('totalDeposit').textContent = formatCurrency(doctor.totalDeposit);
+            document.getElementById('totalExpense').textContent = formatCurrency(totalExpense);
+            document.getElementById('remainingBalance').textContent = formatCurrency(remainingBalance);
+            document.getElementById('remainingBalance').className = 'balance-value' + (remainingBalance < 0 ? ' negative' : '');
+
+            renderTransactions(doctor.transactions);
+        }
+
+        function renderTransactions(transactions) {
+            const container = document.getElementById('transactionsTable');
+
+            if (transactions.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>Belum ada transaksi</p></div>';
+                return;
+            }
+
+            const sortedTransactions = transactions.slice().sort((a, b) =>
+                new Date(b.date) - new Date(a.date)
+            );
+
+            const totalExpense = sortedTransactions.filter(t =>
+                t.type === 'expense' || !t.type
+            ).reduce((sum, t) => sum + t.amount, 0);
+
+            let tableHTML = '<div class="table-container"><table><thead><tr><th>No</th><th>Tanggal</th><th>Keterangan</th><th>Nominal</th><th></th></tr></thead><tbody>';
+
+            sortedTransactions.forEach((t, index) => {
+                const isIncome = t.type === 'income';
+                tableHTML += '<tr>';
+                tableHTML += '<td>' + (index + 1) + '</td>';
+                tableHTML += '<td>' + formatDate(t.date) + '</td>';
+                tableHTML += '<td>' + t.description + (isIncome ? ' (Pemasukan)' : '') + '</td>';
+                tableHTML += '<td class="amount" style="color: ' + (isIncome ? '#059669' : '#dc2626') + '">';
+                tableHTML += (isIncome ? '+' : '-') + formatCurrency(t.amount) + '</td>';
+                tableHTML += '<td><button class="delete-btn" onclick="showDeleteConfirm(' + t.id + ')">×</button></td>';
+                tableHTML += '</tr>';
+            });
+
+            tableHTML += '<tr class="total-row">';
+            tableHTML += '<td colspan="3"><strong>Total Pengeluaran</strong></td>';
+            tableHTML += '<td class="amount"><strong>' + formatCurrency(totalExpense) + '</strong></td>';
+            tableHTML += '<td></td>';
+            tableHTML += '</tr>';
+            tableHTML += '</tbody></table></div>';
+
+            container.innerHTML = tableHTML;
+        }
+
+        // ===== TRANSACTION MANAGEMENT =====
+        async function addExpense() {
+            const date = document.getElementById('expenseDate').value;
+            const description = document.getElementById('expenseDesc').value.trim();
+            const amount = parseInt(document.getElementById('expenseAmount').value);
+
+            if (!date || !description || !amount || amount <= 0) {
+                showNotification('❌ Harap isi semua field dengan benar', 'error');
+                return;
+            }
+
+            const doctor = doctors.find(d => d.id == currentDoctorId);
+
+            if (doctor) {
+                const newTransaction = {
+                    id: Date.now(),
+                    date: date,
+                    description: description,
+                    amount: amount,
+                    type: 'expense'
+                };
+
+                doctor.transactions.push(newTransaction);
+
+                await saveUserData();
+                updateDoctorInfo(doctor);
+
+                clearExpenseForm();
+                toggleExpenseForm();
+
+                const totalExpenseAfter = doctor.transactions.filter(t =>
+                    t.type === 'expense' || !t.type
+                ).reduce((sum, t) => sum + t.amount, 0);
+
+                showNotification('✅ Pengeluaran berhasil ditambahkan! Sisa saldo: ' + formatCurrency(doctor.totalDeposit - totalExpenseAfter), 'success');
+            } else {
+                showNotification('❌ Error: Dokter tidak ditemukan', 'error');
+            }
+        }
+
+        async function addDoctor() {
+            const name = document.getElementById('newDoctorName').value.trim();
+            const deposit = parseInt(document.getElementById('initialDeposit').value) || 0;
+
+            if (!name) {
+                showNotification('❌ Nama dokter harus diisi', 'error');
+                return;
+            }
+
+            const existingDoctor = doctors.find(d =>
+                d.name.toLowerCase() === name.toLowerCase()
+            );
+
+            if (existingDoctor) {
+                showNotification('❌ Dokter dengan nama "' + name + '" sudah ada!', 'error');
+                document.getElementById('newDoctorName').focus();
+                return;
+            }
+
+            const newDoctor = {
+                id: Date.now(),
+                name: name,
+                totalDeposit: 0,
+                transactions: [],
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
+
+            if (deposit > 0) {
+                const initialDepositTransaction = {
+                    id: Date.now() + 1,
+                    date: new Date().toISOString().split('T')[0],
+                    description: 'Deposit Awal',
+                    amount: deposit,
+                    type: 'income'
+                };
+                newDoctor.transactions.push(initialDepositTransaction);
+            }
+
+            doctors.push(newDoctor);
+            await saveUserData();
+            loadDoctors();
+            document.getElementById('doctorSelect').value = newDoctor.id;
+            selectDoctor(newDoctor.id);
+            closeModal('addDoctorModal');
+
+            showNotification('✅ Dokter "' + name + '" berhasil ditambahkan!', 'success');
+        }
+
+        async function addDeposit() {
+            const amount = parseInt(document.getElementById('additionalDeposit').value);
+            const description = document.getElementById('depositDesc').value.trim() || 'Tambah Deposit';
+
+            if (!amount || amount <= 0) {
+                showNotification('❌ Jumlah deposit harus diisi dengan benar', 'error');
+                return;
+            }
+
+            const doctor = doctors.find(d => d.id == currentDoctorId);
+            if (doctor) {
+                const depositTransaction = {
+                    id: Date.now(),
+                    date: new Date().toISOString().split('T')[0],
+                    description: description,
+                    amount: amount,
+                    type: 'income'
+                };
+
+                doctor.transactions.push(depositTransaction);
+                await saveUserData();
+                updateDoctorInfo(doctor);
+                closeModal('addDepositModal');
+
+                document.getElementById('additionalDeposit').value = '';
+                document.getElementById('depositDesc').value = '';
+
+                showNotification('✅ Deposit berhasil ditambahkan!', 'success');
+            }
+        }
+
+        async function confirmDelete() {
+            const doctor = doctors.find(d => d.id == currentDoctorId);
+            if (doctor && deleteTransactionId) {
+                doctor.transactions = doctor.transactions.filter(t =>
+                    t.id != deleteTransactionId
+                );
+                await saveUserData();
+                updateDoctorInfo(doctor);
+                closeModal('confirmDeleteModal');
+                showNotification('✅ Transaksi berhasil dihapus', 'success');
+            }
+        }
+
+        async function confirmDeleteDoctor() {
+            if (currentDoctorId) {
+                const doctorName = doctors.find(d => d.id == currentDoctorId)?.name || 'Dokter';
+
+                doctors = doctors.filter(d => d.id != currentDoctorId);
+                await saveUserData();
+                loadDoctors();
+
+                currentDoctorId = null;
+                document.getElementById('doctorSelect').value = '';
+                document.getElementById('doctorInfo').style.display = 'none';
+                document.getElementById('expenseForm').style.display = 'none';
+                document.getElementById('transactionsSection').style.display = 'none';
+                document.getElementById('noDoctorSelected').style.display = 'block';
+                document.getElementById('deleteDoctorBtn').style.display = 'none';
+
+                closeModal('confirmDeleteDoctorModal');
+                showNotification('✅ ' + doctorName + ' berhasil dihapus!', 'success');
+
+                if (doctors.length > 0) {
+                    selectDoctor(doctors[0].id);
+                    document.getElementById('doctorSelect').value = doctors[0].id;
+                }
+            }
+        }
+
+        // ===== FORM FUNCTIONS =====
+        function toggleExpenseForm() {
+            const form = document.getElementById('expenseForm');
+            const btn = document.getElementById('toggleExpenseBtn');
+
+            if (form.style.display === 'none' || form.style.display === '') {
+                form.style.display = 'block';
+                btn.textContent = '× Tutup Form';
+                btn.className = 'btn btn-outline';
+
+                setTimeout(() => {
+                    document.getElementById('expenseDesc').focus();
+                    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            } else {
+                form.style.display = 'none';
+                btn.textContent = '+ Tambah Pengeluaran';
+                btn.className = 'btn btn-primary';
+            }
+        }
+
+        function clearExpenseForm() {
+            document.getElementById('expenseDesc').value = '';
+            document.getElementById('expenseAmount').value = '';
+            setTodayDate();
+            document.getElementById('expenseDesc').focus();
+        }
+
+        function checkDoctorName() {
+            const name = document.getElementById('newDoctorName').value.trim();
+            const nameField = document.getElementById('newDoctorName');
+            const hint = document.getElementById('nameHint');
+
+            if (name.length > 0) {
+                const existingDoctor = doctors.find(d =>
+                    d.name.toLowerCase() === name.toLowerCase()
+                );
+
+                if (existingDoctor) {
+                    nameField.style.borderColor = '#dc2626';
+                    nameField.style.backgroundColor = '#fef2f2';
+                    hint.style.display = 'block';
+                    hint.style.color = '#dc2626';
+                    hint.textContent = 'Nama dokter sudah ada, gunakan nama yang berbeda';
+                } else {
+                    nameField.style.borderColor = '#059669';
+                    nameField.style.backgroundColor = '#f0fdf4';
+                    hint.style.display = 'block';
+                    hint.style.color = '#059669';
+                    hint.textContent = 'Nama tersedia ✓';
+                }
+            } else {
+                nameField.style.borderColor = '#e5e7eb';
+                nameField.style.backgroundColor = 'white';
+                hint.style.display = 'none';
+            }
+        }
+
+        // ===== MODAL FUNCTIONS =====
+        function showAddDoctorModal() {
+            document.getElementById('newDoctorName').value = '';
+            document.getElementById('initialDeposit').value = '';
+            document.getElementById('addDoctorModal').style.display = 'block';
+            document.getElementById('newDoctorName').focus();
+        }
+
+        function showAddDepositModal() {
+            document.getElementById('additionalDeposit').value = '';
+            document.getElementById('depositDesc').value = '';
+            document.getElementById('addDepositModal').style.display = 'block';
+        }
+
+        function showDeleteConfirm(transactionId) {
+            deleteTransactionId = transactionId;
+            document.getElementById('confirmDeleteModal').style.display = 'block';
+        }
+
+        function showDeleteDoctorModal() {
+            const doctor = doctors.find(d => d.id == currentDoctorId);
+            if (doctor) {
+                document.getElementById('deleteDoctorText').textContent =
+                    'Yakin ingin menghapus "' + doctor.name + '" beserta semua data transaksinya?';
+                document.getElementById('confirmDeleteDoctorModal').style.display = 'block';
+            }
+        }
+
+        function showExportModal() {
+            const doctor = doctors.find(d => d.id == currentDoctorId);
+            if (!doctor) {
+                showNotification('❌ Pilih dokter terlebih dahulu', 'error');
+                return;
+            }
+
+            if (doctor.transactions.length === 0) {
+                showNotification('❌ Tidak ada transaksi untuk di-export', 'error');
+                return;
+            }
+
+            document.getElementById('exportPDFModal').style.display = 'block';
+            setupExportModalEventListeners();
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // ===== PDF EXPORT =====
+        function setupExportModalEventListeners() {
+            const exportTypeSelect = document.getElementById('exportType');
+            if (exportTypeSelect && !exportTypeSelect.hasEventListener) {
+                exportTypeSelect.onchange = function () {
+                    const dateRangeGroup = document.getElementById('dateRangeGroup');
+                    if (dateRangeGroup) {
+                        if (this.value === 'range') {
+                            dateRangeGroup.style.display = 'block';
+                            const today = new Date().toISOString().split('T')[0];
+                            const lastMonth = new Date();
+                            lastMonth.setMonth(lastMonth.getMonth() - 1);
+                            const fromDateEl = document.getElementById('exportFromDate');
+                            const toDateEl = document.getElementById('exportToDate');
+                            if (fromDateEl) fromDateEl.value = lastMonth.toISOString().split('T')[0];
+                            if (toDateEl) toDateEl.value = today;
+                        } else {
+                            dateRangeGroup.style.display = 'none';
+                        }
+                    }
+                };
+                exportTypeSelect.hasEventListener = true;
+            }
+        }
+
+        function processExportToPDF() {
+            const doctor = doctors.find(d => d.id == currentDoctorId);
+            if (!doctor) return;
+
+            const exportTypeEl = document.getElementById('exportType');
+            const exportSortEl = document.getElementById('exportSort');
+            const fromDateEl = document.getElementById('exportFromDate');
+            const toDateEl = document.getElementById('exportToDate');
+
+            if (!exportTypeEl || !exportSortEl) {
+                showNotification('❌ Error: Form elements not found', 'error');
+                return;
+            }
+
+            const exportType = exportTypeEl.value;
+            const exportSort = exportSortEl.value;
+            const fromDate = fromDateEl ? fromDateEl.value : '';
+            const toDate = toDateEl ? toDateEl.value : '';
+
+            let transactionsToExport = doctor.transactions.slice();
+
+            if (exportType === 'range') {
+                if (!fromDate || !toDate) {
+                    showNotification('❌ Pilih range tanggal terlebih dahulu', 'error');
+                    return;
+                }
+
+                transactionsToExport = transactionsToExport.filter(t =>
+                    t.date >= fromDate && t.date <= toDate
+                );
+
+                if (transactionsToExport.length === 0) {
+                    showNotification('❌ Tidak ada transaksi dalam range tanggal tersebut', 'error');
+                    return;
+                }
+            }
+
+            if (exportSort === 'newest') {
+                transactionsToExport.sort((a, b) => new Date(b.date) - new Date(a.date));
+            } else {
+                transactionsToExport.sort((a, b) => new Date(a.date) - new Date(b.date));
+            }
+
+            try {
+                const jsPDF = window.jspdf && window.jspdf.jsPDF;
+
+                if (!jsPDF) {
+                    showNotification('❌ PDF library tidak tersedia', 'error');
+                    return;
+                }
+
+                const doc = new jsPDF();
+
+                // Header
+                doc.setFontSize(18);
+                doc.text('LAPORAN PENGELUARAN', 20, 20);
+
+                doc.setFontSize(14);
+                doc.text(doctor.name, 20, 35);
+                doc.text('Tanggal Export: ' + new Date().toLocaleDateString('id-ID'), 20, 45);
+                doc.text('User: ' + (currentUser.displayName || currentUser.email), 20, 55);
+
+                if (exportType === 'range') {
+                    doc.text('Periode: ' + formatDate(fromDate) + ' s/d ' + formatDate(toDate), 20, 65);
+                }
+
+                // Summary
+                const totalExpense = transactionsToExport.filter(t =>
+                    t.type === 'expense' || !t.type
+                ).reduce((sum, t) => sum + t.amount, 0);
+
+                const remainingBalance = doctor.totalDeposit - totalExpense;
+
+                doc.setFontSize(12);
+                const yPos = exportType === 'range' ? 80 : 70;
+                doc.text('Total Deposit: ' + formatCurrency(doctor.totalDeposit), 20, yPos);
+                doc.text('Total Pengeluaran: ' + formatCurrency(totalExpense), 20, yPos + 10);
+                doc.text('Sisa Saldo: ' + formatCurrency(remainingBalance), 20, yPos + 20);
+
+                // Create table
+                if (transactionsToExport.length > 0) {
+                    doc.text('RIWAYAT TRANSAKSI (' + transactionsToExport.length + ' transaksi):', 20, yPos + 40);
+
+                    const tableY = yPos + 55;
+                    const rowHeight = 8;
+
+                    // Table header
+                    doc.setFillColor(37, 99, 235);
+                    doc.rect(20, tableY - 6, 160, 8, 'F');
+
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFontSize(10);
+                    doc.setFont(undefined, 'bold');
+                    doc.text('No', 25, tableY);
+                    doc.text('Tanggal', 40, tableY);
+                    doc.text('Keterangan', 70, tableY);
+                    doc.text('Jenis', 120, tableY);
+                    doc.text('Nominal', 155, tableY);
+
+                    doc.setTextColor(0, 0, 0);
+                    doc.setFont(undefined, 'normal');
+                    doc.setFontSize(9);
+                    let currentY = tableY + 10;
+
+                    // Table rows
+                    transactionsToExport.forEach((t, index) => {
+                        if (currentY > 260) return;
+
+                        const isIncome = t.type === 'income';
+                        const type = isIncome ? 'Pemasukan' : 'Pengeluaran';
+
+                        if (index % 2 === 0) {
+                            doc.setFillColor(248, 249, 250);
+                            doc.rect(20, currentY - 5, 160, rowHeight, 'F');
+                        }
+
+                        doc.setTextColor(0, 0, 0);
+                        doc.text((index + 1).toString(), 25, currentY);
+                        doc.text(formatDate(t.date), 40, currentY);
+
+                        const desc = t.description.length > 18 ? t.description.substring(0, 15) + '...' : t.description;
+                        doc.text(desc, 70, currentY);
+                        doc.text(type, 120, currentY);
+
+                        if (isIncome) {
+                            doc.setTextColor(5, 150, 105);
+                        } else {
+                            doc.setTextColor(220, 38, 38);
+                        }
+                        doc.text(formatCurrency(t.amount), 155, currentY);
+
+                        currentY += rowHeight;
+                    });
+
+                    // Total row
+                    doc.setFillColor(230, 230, 230);
+                    doc.rect(20, currentY - 5, 160, rowHeight, 'F');
+
+                    doc.setTextColor(0, 0, 0);
+                    doc.setFont(undefined, 'bold');
+                    doc.text('TOTAL PENGELUARAN', 70, currentY);
+                    doc.text(formatCurrency(totalExpense), 155, currentY);
+
+                    doc.setDrawColor(0, 0, 0);
+                    doc.setLineWidth(1);
+                    doc.rect(20, yPos + 49, 160, currentY - (yPos + 49) + 3);
+                }
+
+                // Save PDF
+                let filename = 'Laporan_' + doctor.name.replace(/\s+/g, '_');
+                if (exportType === 'range') {
+                    filename += '_' + fromDate + '_to_' + toDate;
+                }
+                filename += '_' + new Date().getTime() + '.pdf';
+
+                doc.save(filename);
+                showNotification('✅ PDF berhasil diexport!', 'success');
+
+            } catch (error) {
+                console.error('Export error:', error);
+                showNotification('❌ Gagal export: ' + error.message, 'error');
+            }
+
+            closeModal('exportPDFModal');
+        }
+
+        // ===== EVENT LISTENERS =====
+        function setupEventListeners() {
+            // Google login button
+            document.getElementById('googleLoginBtn').onclick = signInWithGoogle;
+
+            // Logout button
+            document.getElementById('logoutBtn').onclick = signOut;
+
+            // Doctor selection
+            document.getElementById('doctorSelect').onchange = function () {
+                selectDoctor(this.value);
+            };
+
+            // Toggle expense form button
+            document.getElementById('toggleExpenseBtn').onclick = toggleExpenseForm;
+
+            // Close form button
+            document.getElementById('closeFormBtn').onclick = toggleExpenseForm;
+
+            // Reset form button
+            document.getElementById('resetFormBtn').onclick = clearExpenseForm;
+
+            // Form submission
+            document.getElementById('addExpenseForm').onsubmit = function (e) {
+                e.preventDefault();
+                addExpense();
+                return false;
+            };
+
+            // Modal close on outside click
+            window.onclick = function (event) {
+                if (event.target.classList.contains('modal')) {
+                    event.target.style.display = 'none';
+                }
+            };
+        }
+
+        // ===== INITIALIZATION =====
+        window.onload = function () {
+            console.log('App initializing...');
+            updateConnectionStatus();
+            setupEventListeners();
+            initAuth();
+        };
+    </script>
+</body>
+
+</html>
